@@ -121,8 +121,6 @@ void copy() {
 
     ASSERT(!(p == q));
 
-    delete pp;
-
     ASSERT_EQ(to_s(q), "[3*, 1, 0 (i), 2 (i), 4]");
 }
 
@@ -197,8 +195,6 @@ void restricted() {
 
     ASSERT(!(p == q));
 
-    delete pp;
-
     ASSERT_EQ(to_s(q), "[3*, 1, 0 (i), 2 (i), 4]");
 
     q.eliminarProceso(p0);
@@ -234,11 +230,11 @@ void restricted() {
 }
 
 int main() {
-    // RUN_TEST( planificadorVacio );
+    RUN_TEST( planificadorVacio );
     RUN_TEST(agregarProcesos);
-    // RUN_TEST( basic );
-    // RUN_TEST( copy );
-    // RUN_TEST( restricted );
+    RUN_TEST( basic );
+    RUN_TEST( copy );
+    RUN_TEST( restricted );
 
     return 0;
 }

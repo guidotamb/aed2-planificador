@@ -75,7 +75,32 @@ PlanificadorRR<T>::PlanificadorRR(){
  */	
 template<class T>
 PlanificadorRR<T>::PlanificadorRR(const PlanificadorRR<T>& p){
-
+	if(p.cantidadDeProcesos() == 0){
+		procesoActual = NULL;
+		cantidadProcesos = 0;
+		planificadorDetenido = false;
+	}else{
+		cantidadProcesos = p.cantidadDeProcesos();
+		planificadorDetenido = p.detenido();
+		T pid = p.procesoEjecutado();
+		procesoActual = new Nodo(pid);
+		procesoActual->pausado = !p.estaActivo(pid);
+		procesoActual->siguiente = procesoActual;
+		procesoActual->anterior = procesoActual;
+		int i;
+		Nodo* actual = procesoActual;
+		Nodo* copia = p.procesoActual;
+		for(i=1; i<cantidadProcesos; i++){
+			copia = copia->siguiente;
+			Nodo* siguiente = new Nodo(copia->pid);
+			siguiente->pausado = copia->pausado;
+			siguiente->anterior = actual;
+			actual->siguiente = siguiente;
+			actual = siguiente;
+		}
+		actual->siguiente = procesoActual;
+		procesoActual->anterior = actual;
+	}
 }
 
 /**
@@ -83,7 +108,13 @@ PlanificadorRR<T>::PlanificadorRR(const PlanificadorRR<T>& p){
  */	 
 template<class T>
 PlanificadorRR<T>::~PlanificadorRR(){
-	
+	int i;
+	Nodo* borrador = procesoActual;
+	for(i = 0; i < cantidadProcesos; i++){
+		Nodo* siguiente = borrador->siguiente;
+		eliminarProceso(borrador->pid);
+		borrador = siguiente;
+	}
 }
 
 /**
@@ -95,21 +126,21 @@ PlanificadorRR<T>::~PlanificadorRR(){
  */
 template<class T>
 void PlanificadorRR<T>::agregarProceso(const T& pid){
-	// assert(!esPlanificado(pid))
-	Nodo* nuevo = new Nodo(pid);
-	if (this->cantidadProcesos == 0) {
-		this->procesoActual = nuevo;
-		this->procesoActual->siguiente = this->procesoActual;
-		this->procesoActual->anterior = this->procesoActual;
+	assert(!esPlanificado(pid));
+	Nodo* nuevoProceso = new Nodo(pid);
+	if (cantidadProcesos == 0) {
+		procesoActual = nuevoProceso;
+		procesoActual->siguiente = procesoActual;
+		procesoActual->anterior = procesoActual;
 	} else {
-		Nodo* ultimo = this->procesoActual->anterior;
-		this->procesoActual->anterior = nuevo;
-		nuevo->anterior = ultimo;
-		ultimo->siguiente = nuevo;
-		nuevo->siguiente = this->procesoActual;
+		Nodo* ultimo = procesoActual->anterior;
+		procesoActual->anterior = nuevoProceso;
+		nuevoProceso->anterior = ultimo;
+		ultimo->siguiente = nuevoProceso;
+		nuevoProceso->siguiente = procesoActual;
 	}
 	if(cantidadDeProcesosActivos() == 0){
-		this->procesoActual = nuevo;
+		procesoActual = nuevoProceso;
 	}
 	cantidadProcesos++;
 }
@@ -122,8 +153,43 @@ void PlanificadorRR<T>::agregarProceso(const T& pid){
  */
 template<class T>
 void PlanificadorRR<T>::eliminarProceso(const T& p){
-	
+	assert(esPlanificado(p));
+	Nodo* aEliminar = dameProceso(p);
+	cout << "Nodo a eliminar: " << aEliminar->pid << endl;
+	if (cantidadProcesos > 1) {
+		//Reorganizo relaciones;
+		if(cantidadProcesos <= 2){
+			aEliminar->siguiente->siguiente = aEliminar->siguiente;
+			aEliminar->siguiente->anterior = aEliminar->siguiente;
+		}else{
+			Nodo* anterior = aEliminar->anterior;
+			Nodo* siguiente = aEliminar->siguiente;
+			anterior->siguiente = aEliminar->siguiente;
+			siguiente->anterior = aEliminar->anterior;	
+		}
+		if(aEliminar->pid == procesoActual->pid){
+			//Pasa al que sigue
+
+			procesoActual = procesoActual->siguiente;
+			int i = 1;
+			if(cantidadProcesos > 2){
+				while(i < cantidadProcesos && procesoActual->pausado){
+					procesoActual = procesoActual->siguiente;	
+				}
+			}
+		}
+	}
+	delete aEliminar;
+	cantidadProcesos--;
 }
+/**template<class T>
+void PlanificadorRR<T>::eliminarProceso(const T& p){
+	assert(esPlanificado(p));
+	Nodo* aEliminar = dameProceso(p);
+	if(cantidadProcesos > 1){
+		
+	}
+}*/
 
 /**
  * Devuelve el proceso que está actualmente en ejecución.
@@ -131,7 +197,8 @@ void PlanificadorRR<T>::eliminarProceso(const T& p){
  */
 template<class T>
 const T& PlanificadorRR<T>::procesoEjecutado() const{
-	
+	assert(cantidadProcesos > 0);
+	return procesoActual->pid;
 }
 
 /**
@@ -141,7 +208,11 @@ const T& PlanificadorRR<T>::procesoEjecutado() const{
  */
 template<class T>
 void PlanificadorRR<T>::ejecutarSiguienteProceso(){
-	
+	assert(cantidadDeProcesosActivos() > 0);
+	procesoActual = procesoActual->siguiente;
+	while(procesoActual->pausado){
+		procesoActual = procesoActual->siguiente;	
+	}
 }
 
 /**
@@ -154,7 +225,17 @@ void PlanificadorRR<T>::ejecutarSiguienteProceso(){
  */
 template<class T>
 void PlanificadorRR<T>::pausarProceso(const T& p){
-	
+	assert(esPlanificado(p));
+	Nodo* proceso = dameProceso(p);
+	if(proceso == procesoActual && cantidadDeProcesosActivos() > 0){
+		procesoActual = procesoActual->siguiente;
+		while(procesoActual->pausado){
+			procesoActual = procesoActual->siguiente;
+		}
+	}
+	assert(!proceso->pausado);
+	// Nodo* procesoAPausar = &proceso;
+	proceso->pausado = true;
 }
 
 /**
@@ -166,7 +247,9 @@ void PlanificadorRR<T>::pausarProceso(const T& p){
  */
 template<class T>
 void PlanificadorRR<T>::reanudarProceso(const T&p){
-	
+	Nodo* proceso = dameProceso(p);
+	assert(esPlanificado(p) && proceso->pausado);
+	proceso->pausado = false;
 }
 
 /**
@@ -176,7 +259,8 @@ void PlanificadorRR<T>::reanudarProceso(const T&p){
  */
 template<class T>
 void PlanificadorRR<T>::detener(){
-	
+	assert(!planificadorDetenido);
+	planificadorDetenido = true;
 }
 
 /**
@@ -186,7 +270,8 @@ void PlanificadorRR<T>::detener(){
  */
 template<class T>
 void PlanificadorRR<T>::reanudar(){
-	
+	assert(planificadorDetenido);
+	planificadorDetenido = false;
 }
 
 /**
@@ -194,7 +279,7 @@ void PlanificadorRR<T>::reanudar(){
  */
 template<class T>
 bool PlanificadorRR<T>::detenido() const{
-	
+	return planificadorDetenido;
 }
 
 /**
@@ -202,10 +287,10 @@ bool PlanificadorRR<T>::detenido() const{
  */
 template<class T>
 bool PlanificadorRR<T>::esPlanificado(const T& p) const{
-	if (cantidadProcesos > 0) {
+	if(cantidadProcesos > 0){
 		int i;
-		Nodo* actual = this->procesoActual;
-		for (i=0; i < this.cantidadProcesos; i++) {
+		Nodo* actual = procesoActual;
+		for (i=0; i < cantidadProcesos; i++) {
 			if (actual->pid == p) {
 				return true;
 			} else {
@@ -213,7 +298,7 @@ bool PlanificadorRR<T>::esPlanificado(const T& p) const{
 			}
 		}
 		return false;
-	} else {
+	}else{
 		return false;
 	}
 }
@@ -226,13 +311,14 @@ template<class T>
 bool PlanificadorRR<T>::estaActivo(const T& p) const{
 	assert(esPlanificado(p));
 	int i;
-	Nodo* actual = this->procesoActual;
-	for (i = 0; i < this->cantidadProcesos; i++) {
+	Nodo* actual = procesoActual;
+	for (i = 0; i < cantidadProcesos; i++) {
 		if (actual->pid == p) {
 			return !(actual->pausado);
 		}
 		actual = actual->siguiente;
 	}
+	// Nodo* procesoActivo = &proceso;
 	return false;
 }
 
@@ -241,7 +327,7 @@ bool PlanificadorRR<T>::estaActivo(const T& p) const{
  */
 template<class T>
 bool PlanificadorRR<T>::hayProcesos() const{
-	
+	return cantidadProcesos > 0;
 }
 
 /**
@@ -249,7 +335,7 @@ bool PlanificadorRR<T>::hayProcesos() const{
  */
 template<class T>
 bool PlanificadorRR<T>::hayProcesosActivos() const{
-	
+	return cantidadDeProcesosActivos() > 0;
 }
 
 /**
@@ -257,7 +343,7 @@ bool PlanificadorRR<T>::hayProcesosActivos() const{
  */
 template<class T>
 int PlanificadorRR<T>::cantidadDeProcesos() const{
-	
+	return cantidadProcesos;
 }
 
 /**
@@ -265,7 +351,19 @@ int PlanificadorRR<T>::cantidadDeProcesos() const{
  */
 template<class T>
 int PlanificadorRR<T>::cantidadDeProcesosActivos() const{
-	
+	if(cantidadProcesos > 0){
+		int procesosActivos = 0;
+		int i = 0;
+		Nodo* actual = procesoActual;
+		for (i=0; i < cantidadProcesos; i++) {
+			if (!actual->pausado) {
+				procesosActivos++;
+			}
+			actual = actual->siguiente;
+		}
+		return procesosActivos;
+	}
+	return 0;
 }
 
 /**
@@ -273,6 +371,25 @@ int PlanificadorRR<T>::cantidadDeProcesosActivos() const{
  */
 template<class T>
 bool PlanificadorRR<T>::operator==(const PlanificadorRR<T>& p) const{
+	if (cantidadProcesos == 0 && p.cantidadDeProcesos() == 0){
+		return true;
+	}
+	bool result = (cantidadProcesos == p.cantidadDeProcesos()) && p.detenido() == planificadorDetenido;
+	if (!result){
+		return false;
+	}
+	int i = 1;
+	T pid = p.procesoEjecutado();
+	result = procesoActual->pid == pid && procesoActual->pausado == !p.estaActivo(pid);
+	Nodo* it1 = procesoActual->siguiente;
+	Nodo* it2 = p.procesoActual->siguiente;
+	while (result && i<cantidadProcesos){
+		result = result && it1->pid == it2->pid && it1->pausado == !p.estaActivo(it2->pid);
+		it1 = it1->siguiente;
+		it2 = it2->siguiente;
+		i++;
+	}
+	return result; //result;
 
 }
 
@@ -297,18 +414,51 @@ bool PlanificadorRR<T>::operator==(const PlanificadorRR<T>& p) const{
  */
 template<class T>
 ostream& PlanificadorRR<T>::mostrarPlanificadorRR(ostream& os) const{
-	
+	if(cantidadProcesos == 0){
+			os << "[]";
+	}else{
+		os <<"[";
+		Nodo* mostrado = procesoActual;
+		int i=0;
+		while(i<cantidadProcesos){
+			os<<mostrado->pid;
+			if(mostrado->pausado){
+				os<<" (i)";
+			}else if(procesoActual == mostrado){
+				os<<"*";
+			}
+			i++;
+			if (i==cantidadProcesos){
+				os<<"]";
+			}else{
+				os<<", ";
+			}
+			mostrado = mostrado->siguiente;
+		}
+
+	}
+	// return os;
 }
 
 template<class T>
 ostream& operator<<(ostream& out, const PlanificadorRR<T>& a) {
-	
+	return a.mostrarPlanificadorRR(out);
 }
 
 //Metodos auxiliares
 template<class T>
 typename PlanificadorRR<T>::Nodo* PlanificadorRR<T>::dameProceso(const T& p){
-	
+	int i;
+	Nodo* actual = procesoActual;
+	for (i=0; i < cantidadProcesos; i++) {
+		if (actual->pid == p) {
+			return actual;
+		} else {
+			actual = actual->siguiente;
+		}
+	}
+	// cout << "No existe";
+	return NULL;
 }
 
 #endif // PLANIFICADOR_RR_H_
